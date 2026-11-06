@@ -37,6 +37,7 @@ Backend lives in `treech-telegram-bot` (`MemeTowerController`, `MemeTowerOperati
 | `GameView` | `src/game/render/GameView.ts` | Renderer, isometric orthographic camera (100 px/unit) |
 | `MemeLibrary` | `src/game/memes/MemeLibrary.ts` | Memes from `src/assets/memes` (image / gif / video), placeholders, playback only for visible memes |
 | `memeSources` | `src/game/memes/memeSources.ts` | Image, animated GIF (gifuct-js, frame-by-frame), video (`VideoTexture`) memes |
+| `ScoreSubmitter` | `src/game/scoring/ScoreSubmitter.ts` | Guaranteed score delivery: localStorage outbox (`PendingScoreStore`), retries, re-send on online/visible/next launch |
 | `GameHud` | `src/game/ui/GameHud.ts` | DOM HUD: score, best score, start/game-over screens, leaderboard |
 | `difficulty` | `src/game/difficulty.ts` | Box speed 5.5 → +0.35 every 3 boxes (max 9.5) |
 | `CFG` | `src/game/constants.ts` | Mechanics/physics/camera constants |

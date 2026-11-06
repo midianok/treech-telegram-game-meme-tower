@@ -66,15 +66,15 @@ export function memeTowerApiMockPlugin(): Plugin {
           if (request.method === 'POST' && url.pathname === `${MEME_TOWER_API_PATH}/score`) {
             const body = await readJsonBody(request);
             const entry = normalizeScoreRequest(body);
-            const currentScore = scores.get(entry.userId)?.score ?? 0;
+            const previous = scores.get(entry.userId);
+            const bestScore = Math.max(entry.score, previous?.score ?? 0);
 
-            scores.set(entry.userId, {
-              ...entry,
-              score: Math.max(entry.score, currentScore),
+            scores.set(entry.userId, { ...entry, score: bestScore });
+
+            sendJson(response, {
+              bestScore,
+              isNewRecord: previous ? entry.score > previous.score : entry.score > 0,
             });
-
-            response.statusCode = 204;
-            response.end();
             return;
           }
 

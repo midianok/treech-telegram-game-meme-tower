@@ -16,6 +16,7 @@ import { MemeLibrary } from './memes/MemeLibrary';
 import { PhysicsWorld } from './physics/PhysicsWorld';
 import { GameView } from './render/GameView';
 import { BestScoreRepository } from './scoring/BestScoreRepository';
+import { ScoreSubmitter } from './scoring/ScoreSubmitter';
 import { GameSession } from './state/GameSession';
 import { type LossReason, Tower } from './tower/Tower';
 import { GameHud } from './ui/GameHud';
@@ -30,6 +31,7 @@ export class MemeTowerGame {
   private readonly session = new GameSession();
   private readonly bestScoreRepository = new BestScoreRepository();
   private readonly memeTowerApi = new MemeTowerApi();
+  private readonly scoreSubmitter = new ScoreSubmitter(this.memeTowerApi, () => this.log);
   private readonly tower: Tower;
 
   private playerContext = getTelegramPlayerContext();
@@ -125,6 +127,8 @@ export class MemeTowerGame {
     this.resizeToViewport();
 
     this.createRound(true);
+    // Досылаем результаты, которые не дошли до сервера в прошлых запусках.
+    this.scoreSubmitter.start(this.playerContext?.userId ?? null);
 
     let lastTime = performance.now();
     this.view.renderer.setAnimationLoop((now) => {
@@ -231,6 +235,9 @@ export class MemeTowerGame {
       this.newLocalRecord = true;
     }
 
+    // Лучший счёт до этой игры — чтобы понять, рекорд ли это, если сервер не скажет сам.
+    const previousBestScore = this.userBestScoreLoaded ? this.session.bestScore : null;
+
     if (!this.playerContext || this.userBestScoreLoaded) {
       this.hud.setBestScore(this.session.bestScore);
     }
@@ -238,7 +245,7 @@ export class MemeTowerGame {
     this.gameOverTimer = CFG.gameOverDelay;
     this.hud.showLeaderboardLoading();
     this.bestScoreRequestId += 1;
-    void this.syncMemeTowerScore(++this.scoreSyncRequestId, this.session.score);
+    void this.syncMemeTowerScore(++this.scoreSyncRequestId, this.session.score, previousBestScore);
   }
 
   private isNewRecord(): boolean {
@@ -268,7 +275,9 @@ export class MemeTowerGame {
         return;
       }
 
-      const bestScore = userScore?.score ?? 0;
+      // Неотправленный результат тоже считаем: он уже набран и дойдёт до сервера.
+      const { userId, chatId } = this.playerContext;
+      const bestScore = Math.max(userScore?.score ?? 0, this.scoreSubmitter.pendingScore(userId, chatId));
       this.session.bestScore = bestScore;
       this.userBestScoreLoaded = true;
       this.hud.setBestScore(bestScore);
@@ -285,8 +294,8 @@ export class MemeTowerGame {
     }
   }
 
-  private async syncMemeTowerScore(requestId: number, score: number): Promise<void> {
-    await this.saveScoreIfHigherThanServer(requestId, score);
+  private async syncMemeTowerScore(requestId: number, score: number, previousBestScore: number | null): Promise<void> {
+    await this.submitScore(requestId, score, previousBestScore);
 
     try {
       const leaderboard = await this.memeTowerApi.getLeaderboard(this.playerContext?.chatId ?? 0);
@@ -307,67 +316,63 @@ export class MemeTowerGame {
     }
   }
 
-  private async saveScoreIfHigherThanServer(requestId: number, score: number): Promise<void> {
+  /**
+   * Результат отправляется всегда, сразу и без предварительного запроса текущего рекорда:
+   * максимум хранит сервер. Неудачная отправка остаётся в очереди `ScoreSubmitter` и будет повторена.
+   */
+  private async submitScore(requestId: number, score: number, previousBestScore: number | null): Promise<void> {
     if (!this.playerContext) {
       return;
     }
 
     const { userId, chatId } = this.playerContext;
-    let currentBestScore = 0;
+    this.log.info('submitting score', { score, previousBestScore });
 
-    try {
-      const currentUserScore = await this.memeTowerApi.getUserScore(userId, chatId);
-      currentBestScore = currentUserScore?.score ?? 0;
+    // Рестарт не прерывает отправку — requestId проверяется только перед обновлением HUD.
+    const outcome = await this.scoreSubmitter.submit(userId, chatId, score);
 
-      if (requestId === this.scoreSyncRequestId) {
-        this.session.bestScore = Math.max(this.session.bestScore, currentBestScore);
-        this.userBestScoreLoaded = true;
-        this.hud.setBestScore(this.session.bestScore);
-      }
-    } catch (error) {
-      if (requestId === this.scoreSyncRequestId) {
-        console.error(t('log.failedToSyncUserScore'), error);
-        this.log.error('failed to fetch user score before submit', { score, error: String(error) });
-        if (!this.userBestScoreLoaded) {
-          this.hud.showBestScoreUnavailable();
-        }
-      }
-      // currentBestScore остаётся 0, чтобы не блокировать отправку очков
-    }
-
-    if (score <= currentBestScore) {
-      this.log.info('score not a new record, skipping submit', { score, serverBestScore: currentBestScore });
+    if (requestId !== this.scoreSyncRequestId) {
       return;
     }
 
-    this.log.info('submitting new best score', { score, previousBestScore: currentBestScore });
-
-    try {
-      // Отправляем очки вне зависимости от requestId — рестарт не должен прерывать отправку
-      await this.memeTowerApi.submitScore({ userId, chatId, score });
-
-      this.log.info('score submitted successfully', { score });
-
-      if (requestId !== this.scoreSyncRequestId) {
-        return;
-      }
-
-      this.session.bestScore = score;
-      this.userBestScoreLoaded = true;
-      this.newServerRecord = true;
-      this.hud.setBestScore(score);
-      this.hud.setNewRecord(this.isNewRecord());
-    } catch (error) {
-      this.log.error('failed to submit score', { score, error: String(error) });
-
-      if (requestId !== this.scoreSyncRequestId) {
-        return;
-      }
-
-      console.error(t('log.failedToSyncUserScore'), error);
+    if (!outcome?.saved) {
+      console.error(t('log.failedToSyncUserScore'));
       if (!this.userBestScoreLoaded) {
         this.hud.showBestScoreUnavailable();
       }
+      return;
+    }
+
+    const ownScore = outcome.submittedScore === score;
+    const isNewRecord =
+      outcome.isNewRecord !== undefined
+        ? outcome.isNewRecord && ownScore
+        : previousBestScore !== null && score > previousBestScore;
+    let serverBestScore = outcome.bestScore;
+    if (serverBestScore === undefined && !this.userBestScoreLoaded) {
+      // Старый бэкенд не возвращает рекорд в ответе на POST — дочитываем отдельно.
+      try {
+        serverBestScore = (await this.memeTowerApi.getUserScore(userId, chatId))?.score ?? 0;
+      } catch (error) {
+        this.log.error('failed to fetch user score after submit', { score, error: String(error) });
+      }
+      if (requestId !== this.scoreSyncRequestId) {
+        return;
+      }
+    }
+
+    if (serverBestScore !== undefined || this.userBestScoreLoaded) {
+      const bestScore = Math.max(this.session.bestScore, serverBestScore ?? 0, outcome.submittedScore);
+      this.session.bestScore = bestScore;
+      this.userBestScoreLoaded = true;
+      this.hud.setBestScore(bestScore);
+    } else {
+      this.hud.showBestScoreUnavailable();
+    }
+
+    if (isNewRecord) {
+      this.newServerRecord = true;
+      this.hud.setNewRecord(this.isNewRecord());
     }
   }
 

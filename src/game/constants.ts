@@ -37,3 +37,4 @@ export const CFG = {
 
 export const STORAGE_BEST_SCORE_KEY = 'memeTowerBestScore';
 export const STORAGE_MUTED_KEY = 'memeTowerMuted';
+export const STORAGE_PENDING_SCORES_KEY = 'memeTowerPendingScores';
