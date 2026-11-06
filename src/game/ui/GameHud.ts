@@ -143,7 +143,11 @@ export class GameHud {
         const row = el('li', currentUserId === entry.userId ? 'leaderboard-row current' : 'leaderboard-row');
         row.append(
           el('span', 'place', `${index + 1}.`),
-          el('span', 'name', entry.userName?.trim() || t('hud.playerFallback', { userId: entry.userId })),
+          el(
+            'span',
+            'name',
+            entry.userName?.trim().replace(/^@+/, '') || t('hud.playerFallback', { userId: entry.userId }),
+          ),
           el('span', 'score', String(entry.score)),
         );
         return row;

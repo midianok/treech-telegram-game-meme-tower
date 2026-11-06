@@ -9,7 +9,6 @@ import { SmoothDamp } from './SmoothDamp';
 
 type Axis = 'x' | 'z';
 const otherAxis = (a: Axis): Axis => (a === 'x' ? 'z' : 'x');
-const randInt = (a: number, b: number) => Math.floor(Math.random() * (b - a + 1)) + a;
 
 export type LossReason = 'miss' | 'beyond' | 'collapse';
 
@@ -30,7 +29,6 @@ export class Tower {
   private pieces: Box[] = [];
   private moving: { box: Box; axis: Axis } | null = null;
   private playing = false;
-  private memeRun = randInt(...CFG.memeRun);
   private readonly flash: PerfectFlash;
   private readonly dampAxis = new SmoothDamp(CFG.smoothTime, CFG.dampEps);
   private readonly dampOther = new SmoothDamp(CFG.smoothTime, CFG.dampEps);
@@ -58,13 +56,12 @@ export class Tower {
     this.view.resetCamera();
     this.dampAxis.reset();
     this.dampOther.reset();
-    this.memeRun = randInt(...CFG.memeRun);
     this.playing = false;
   }
 
   start(): void {
     this.playing = true;
-    this.spawn('x', CFG.boxSize, CFG.boxSize, { x: 0, z: 0 }, this.base.position, this.memeFor(1, this.base.meme));
+    this.spawn('x', CFG.boxSize, CFG.boxSize, { x: 0, z: 0 }, this.base.position, this.memes.pick(this.base.meme));
   }
 
   /** Тап: положить едущую коробку. */
@@ -143,7 +140,7 @@ export class Tower {
     this.events.placed(perfect);
 
     const from = { x: placed.mesh.position.x, y: topPos.y + CFG.boxHeight, z: placed.mesh.position.z };
-    this.spawn(otherAxis(axis), placed.sx, placed.sz, placed.rect, from, this.memeFor(this.boxes.length + 1, placed.meme));
+    this.spawn(otherAxis(axis), placed.sx, placed.sz, placed.rect, from, this.memes.pick(placed.meme));
   }
 
   update(dt: number, speed: number): void {
@@ -230,13 +227,6 @@ export class Tower {
     this.dampAxis.reset();
     this.dampOther.reset();
     this.moving = { box: new Box(this.view.scene, meme, sx, sz, rect, pos), axis };
-  }
-
-  /** Мем сохраняется 1–2 коробки подряд, потом меняется на другой. */
-  private memeFor(count: number, prev: Meme): Meme {
-    if (count % this.memeRun !== 0) return prev;
-    this.memeRun = randInt(...CFG.memeRun);
-    return this.memes.pick(prev);
   }
 
   /** Глубоко внизу коробки уже не видны — делаем их статичными, чтобы физика не тормозила. */

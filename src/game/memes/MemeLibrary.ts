@@ -25,6 +25,8 @@ const MEME_MODULES = import.meta.glob(
 
 const MEME_MEDIA: MemeMedia[] = Object.entries(MEME_MODULES)
   .sort(([left], [right]) => left.localeCompare(right, undefined, { numeric: true }))
+  // Одинаковые по содержимому файлы Vite отдаёт по одному URL — не грузим мем дважды.
+  .filter(([, url], index, all) => all.findIndex(([, other]) => other === url) === index)
   .map(([path, url], index) => ({
     key: `meme_${index + 1}`,
     type: /\.(mp4|webm|mov)$/i.test(path) ? 'video' : /\.gif$/i.test(path) ? 'gif' : 'image',

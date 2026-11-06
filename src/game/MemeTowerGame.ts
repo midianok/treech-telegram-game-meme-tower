@@ -7,7 +7,7 @@ import {
   hapticNotification,
   onTelegramViewportChanged,
 } from '../telegram';
-import { muted, setMuted, sfx } from './audio/sfx';
+import { muted, preloadFinishSounds, setMuted, sfx } from './audio/sfx';
 import { getGameViewportSize } from './config';
 import { CFG, STORAGE_MUTED_KEY } from './constants';
 import { getBoxSpeed } from './difficulty';
@@ -52,6 +52,8 @@ export class MemeTowerGame {
     };
 
     const view = new GameView(app);
+    // Фразы при проигрыше грузятся в фоне — до первого game over успевают.
+    void preloadFinishSounds();
     // Основание ниже на высоких экранах, как в оригинале.
     const baseY = getGameViewportSize().height > 667 ? -3 : -2;
     const [physics, memes] = await Promise.all([
