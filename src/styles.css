@@ -1,0 +1,344 @@
+:root {
+  --hue: 205;
+  --bg-top: hsl(var(--hue) 80% 72%);
+  --bg-bottom: hsl(calc(var(--hue) + 25) 62% 46%);
+  /* В полноэкранном режиме Telegram рисует свои кнопки поверх — отступаем от них. */
+  --safe-top: calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+  --safe-bottom: calc(var(--tg-safe-area-inset-bottom, 0px) + var(--tg-content-safe-area-inset-bottom, 0px));
+  color-scheme: light;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  min-height: 100dvh;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  overflow: hidden;
+  color: #fff;
+  background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+canvas {
+  display: block;
+}
+
+/* ───────── экран загрузки ───────── */
+
+#loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+  transition: opacity 0.3s ease;
+}
+
+#loading-screen.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.loading-title {
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-shadow: 0 4px 20px rgb(0 0 0 / 0.3);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.loading-bar-wrap {
+  width: 200px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgb(255 255 255 / 0.25);
+}
+
+.loading-progress {
+  width: 0;
+  height: 100%;
+  border-radius: 3px;
+  background: #fff;
+  transition: width 0.1s ease;
+}
+
+@keyframes pulse {
+  50% { opacity: 0.6; }
+}
+
+/* ───────── HUD ───────── */
+
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+#hud button {
+  pointer-events: auto;
+}
+
+.hud-score {
+  position: absolute;
+  top: calc(var(--safe-top) + 24px);
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 64px;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 2px 12px rgb(0 0 0 / 0.25);
+}
+
+.hud-score.bump {
+  animation: bump 0.18s ease-out;
+}
+
+@keyframes bump {
+  50% { transform: scale(1.18); }
+}
+
+.hud-best {
+  position: absolute;
+  left: 16px;
+  bottom: calc(var(--safe-bottom) + 16px);
+  font-size: 16px;
+  font-weight: 700;
+  text-shadow: 0 2px 8px rgb(0 0 0 / 0.3);
+}
+
+.icon-btn {
+  position: absolute;
+  top: calc(var(--safe-top) + 16px);
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  font-size: 20px;
+  background: rgb(255 255 255 / 0.22);
+  cursor: pointer;
+}
+
+.hud-toast {
+  position: absolute;
+  top: 32%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 34px;
+  font-weight: 900;
+  opacity: 0;
+  text-shadow: 0 3px 14px rgb(0 0 0 / 0.3);
+}
+
+.hud-toast.show {
+  animation: toast 0.9s ease-out;
+}
+
+@keyframes toast {
+  0% { opacity: 0; transform: translateY(12px) scale(0.85); }
+  20% { opacity: 1; transform: translateY(0) scale(1.05); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-24px) scale(1); }
+}
+
+/* После 10 коробок низ экрана плавно уходит в цвет фона */
+.hud-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 150px;
+  background: linear-gradient(to top, var(--bg-bottom), transparent);
+  opacity: 0;
+  transition: opacity 0.6s;
+}
+
+.hud-fade.visible {
+  opacity: 1;
+}
+
+/* ───────── экраны ───────── */
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: calc(var(--safe-top) + 24px) 16px calc(var(--safe-bottom) + 24px);
+  text-align: center;
+  background: rgb(20 10 50 / 0.28);
+  backdrop-filter: blur(2px);
+  transition: opacity 0.25s;
+}
+
+.overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(40px, 11vw, 68px);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  text-shadow: 0 4px 20px rgb(0 0 0 / 0.3);
+}
+
+.subtitle {
+  margin: 0;
+  max-width: 360px;
+  font-size: 17px;
+  line-height: 1.4;
+  white-space: pre-line;
+  opacity: 0.92;
+}
+
+.tap-hint {
+  margin-top: 18px;
+  font-size: 20px;
+  font-weight: 800;
+  animation: tap-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes tap-pulse {
+  50% { opacity: 0.45; transform: scale(0.96); }
+}
+
+.over-title {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 900;
+}
+
+.final-score {
+  font-size: 84px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.final-note {
+  min-height: 22px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffd766;
+}
+
+.leaderboard {
+  width: min(100%, 390px);
+  padding: 14px 18px 12px;
+  border: 2px solid rgb(255 255 255 / 0.24);
+  border-radius: 16px;
+  background: rgb(20 10 60 / 0.55);
+}
+
+.leaderboard-title {
+  margin-bottom: 8px;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
+.leaderboard-status {
+  padding: 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.leaderboard-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.leaderboard-row {
+  display: flex;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.leaderboard-row.current {
+  color: #ffd766;
+}
+
+.leaderboard-row .place {
+  width: 2.2em;
+  flex: none;
+  opacity: 0.8;
+}
+
+.leaderboard-row .name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaderboard-row .score {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.btn {
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn.primary {
+  margin-top: 8px;
+  padding: 15px 44px;
+  font-size: 20px;
+  color: #3b1d8f;
+  background: #fff;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.2);
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.restart-hint {
+  font-size: 14px;
+  opacity: 0.8;
+}
